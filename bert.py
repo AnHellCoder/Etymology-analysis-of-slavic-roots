@@ -22,7 +22,9 @@ from copy import deepcopy
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import torch
+import matplotlib.pyplot as plt
 from datasets import Dataset
+import random as rd
 
 class WeightedTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
@@ -45,10 +47,21 @@ dataset = load_dataset(
     }
 )
 
+#Заимствованные корни с наследованными приставками и суффиксами. Необходимо рассмотреть внимание для этих слов
+test_words = ["дебажить", "электричество", "тональность", "штуковина", "сервак", "акк", "агриться", "залутать", "видос", "криповый", "имба"]
+
+declinable = dataset["train"].filter(lambda x: x["declinable"] == True)
+undeclinable = dataset["train"].filter(lambda x: x["declinable"] == False)
+
+declinable = rd.sample(list(declinable["word"]), 5)
+undeclinable = rd.sample(list(undeclinable["word"]), 5)
+
+words = declinable + undeclinable
+
 # оставляем только нужные столбцы
 dataset = dataset.remove_columns(
     [c for c in dataset["train"].column_names if c not in ["word",
-    "protolanguage", "borrowed_century"]]
+    "protolanguage"]]
 )
 
 dataset = dataset.rename_column("protolanguage", "label")
@@ -96,7 +109,7 @@ training_args = TrainingArguments(
     per_device_train_batch_size=32,
     per_device_eval_batch_size=64,
 
-    num_train_epochs=8,   # важно: данных мало
+    num_train_epochs=100,
     weight_decay=0.01,
 
     logging_steps=10,
@@ -114,7 +127,7 @@ fold_histories = []
 # eval_dataset = splited["test"]
 
 labels = np.array(dataset["train"]["labels"])
-centuries = np.array(dataset["train"]["borrowed_century"])
+#centuries = np.array(dataset["train"]["borrowed_century"])
 
 skf = StratifiedKFold(
     n_splits=5,
@@ -142,22 +155,132 @@ def compute_metrics(eval_pred):
     }
 
 all_f1 = []
+general_correct_predictions = []
 
 for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), labels)):
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_name,
+        num_labels=2,
+        attn_implementation="eager",
+    )
+
+    plt.figure(figsize=(30,30))
+
+    inputs = tokenizer(
+        words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    outputs = model(
+        **inputs,
+        output_attentions=True
+    )
+
+    attentions = outputs.attentions
+
+    layer = -1
+    head = 0
+
+    for i, w in enumerate(words):
+        attn_mean = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(5, 2, i+1)
+        tokens = tokenizer.convert_ids_to_tokens(
+            inputs["input_ids"][i]
+        )
+
+        plt.imshow(attn_mean, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title("RuBERT attention")
+        plt.colorbar()
+
+    plt.savefig(f"./etymology-analysis/RuBERT_attention_pretrained{fold}.png")
+
+
+    plt.figure(figsize=(30,30))
+    num_heads = attentions[layer].shape[1]
+    for h in range(num_heads):
+        attn = attentions[layer][0, h].detach().cpu().numpy()
+
+        plt.subplot(3, 4, h+1)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"RuBERT attention")
+        plt.colorbar()
+
+    plt.tight_layout()
+    plt.savefig(f"./etymology-analysis/RuBERT_attention_pretrained_all_heads{fold}.png")
+
+    plt.show()
+
+    # 2. токенизация
+    inputs = tokenizer(
+        test_words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    # 3. перенос на GPU
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    # 4. forward pass (ВАЖНО: return_dict=True)
+    outputs = model(
+        **inputs,
+        output_attentions=True,
+    )
+
+    # 5. берём encoder attention (а не outputs.attentions!)
+    attentions = outputs.attentions
+    plt.figure(figsize=(30,30))
+    for i, w in enumerate(test_words):
+
+        # усреднение attention по всем головам
+        attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(6, 2, i + 1)
+
+        # токены BERT
+        tokens = tokenizer.convert_ids_to_tokens(
+            inputs["input_ids"][i]
+        )
+
+        plt.imshow(attn, interpolation="nearest")
+
+        plt.xticks(
+            range(len(tokens)),
+            tokens,
+            rotation=90
+        )
+
+        plt.yticks(
+            range(len(tokens)),
+            tokens
+        )
+
+        plt.title(f"RuBERT attention for word {w}")
+
+        plt.colorbar()
+
+    plt.savefig(f"./etymology-analysis/RuBERT_attention_pretrained_{fold}.png")
+
+
 
     print(f"\n===== Fold {fold+1} =====")
 
     train_dataset = dataset["train"].select(train_idx)
     val_dataset = dataset["train"].select(val_idx)
 
-    train_dataset = train_dataset.remove_columns(["word", "borrowed_century"])
-    val_dataset = val_dataset.remove_columns(["word", "borrowed_century"])
-
-    # создаём НОВУЮ модель каждый раз
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_name,
-        num_labels=2
-    )
+    train_dataset = train_dataset.remove_columns(["word"])
+    val_dataset = val_dataset.remove_columns(["word"])
 
     trainer = WeightedTrainer(
         model=model,
@@ -165,7 +288,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
-        #callbacks=[EarlyStoppingCallback(early_stopping_patience=8)],
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=10)],
     )
 
     trainer.train()
@@ -307,6 +430,17 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
     print("Точность определения японских заимств.:", compute_metrics((predictions_japanese.predictions,predictions_japanese.label_ids)))
     print("Точность определения польских заимств.:", compute_metrics((predictions_polish.predictions,predictions_polish.label_ids)))
 
+    general_correct_predictions.append(
+        (predictions_arabian.predictions.argmax(axis=1) == predictions_arabian.label_ids).sum().item()+
+        (predictions_chinese.predictions.argmax(axis=1) == predictions_chinese.label_ids).sum().item()+
+        (predictions_english.predictions.argmax(axis=1) == predictions_english.label_ids).sum().item()+
+        (predictions_french.predictions.argmax(axis=1) == predictions_french.label_ids).sum().item()+
+        (predictions_german.predictions.argmax(axis=1) == predictions_german.label_ids).sum().item()+
+        (predictions_italian.predictions.argmax(axis=1) == predictions_italian.label_ids).sum().item()+
+        (predictions_japanese.predictions.argmax(axis=1) == predictions_japanese.label_ids).sum().item()+
+        (predictions_polish.predictions.argmax(axis=1) == predictions_polish.label_ids).sum().item()
+    )
+
     # логиты → вероятности
     #probs = torch.nn.functional.softmax(
     #    torch.tensor(predictions.predictions), dim=1
@@ -319,9 +453,120 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
 
     #print(trainer.evaluate())
 
+    plt.figure(figsize=(30,30))
+    inputs = tokenizer(
+        words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    outputs = model(
+        **inputs,
+        output_attentions=True
+    )
+
+    attentions = outputs.attentions
+
+    layer = -1
+    head = 0
+
+    plt.figure(figsize=(20,20))
+    for i, w in enumerate(words):
+        attn_mean = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(5, 2, i+1)
+        tokens = tokenizer.convert_ids_to_tokens(
+            inputs["input_ids"][i]
+        )
+
+        plt.imshow(attn_mean, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title("RuBERT attention")
+        plt.colorbar()
+
+    plt.savefig(f"./etymology-analysis/RuBERT_attention{fold}.png")
+
+
+    plt.figure(figsize=(30,30))
+    num_heads = attentions[layer].shape[1]
+    for h in range(num_heads):
+        attn = attentions[layer][0, h].detach().cpu().numpy()
+
+        plt.subplot(3, 4, h+1)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"RuBERT attention")
+        plt.colorbar()
+    
+    plt.tight_layout()
+    plt.savefig(f"./etymology-analysis/RuBERT_attention_pretrained_all_heads{fold}.png")
+
+
+
+    # 2. токенизация
+    inputs = tokenizer(
+        test_words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    # 3. перенос на GPU
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    # 4. forward pass (ВАЖНО: return_dict=True)
+    outputs = model(
+        **inputs,
+        output_attentions=True
+    )
+
+    # 5. берём encoder attention (а не outputs.attentions!)
+    attentions = outputs.attentions
+
+    for i, w in enumerate(test_words):
+
+        # усреднение attention по всем головам
+        attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(6, 2, i + 1)
+
+        # токены BERT
+        tokens = tokenizer.convert_ids_to_tokens(
+            inputs["input_ids"][i]
+        )
+
+        plt.imshow(attn, interpolation="nearest")
+
+        plt.xticks(
+            range(len(tokens)),
+            tokens,
+            rotation=90
+        )
+
+        plt.yticks(
+           range(len(tokens)),
+            tokens
+        )
+
+        plt.title(f"RuBERT attention for word {w}")
+
+        plt.colorbar()
+
+    plt.savefig(f"./etymology-analysis/RuBERT_attention_{fold}.png")
+
+    plt.show()
+
 print("\n===== FINAL RESULT =====")
 print("Mean F1:", np.mean(all_f1))
 print("Std F1:", np.std(all_f1))
+print("Total correct predictions per fold:", general_correct_predictions)
 
 plt.figure()
 
@@ -333,6 +578,6 @@ plt.ylabel("Метрика F1")
 plt.title("Метрика F1 за итерацию по каждому блоку")
 plt.legend()
 
-plt.savefig("plots/bert_epochs.png")
+#plt.savefig("plots/bert_epochs.png")
 
 plt.show()

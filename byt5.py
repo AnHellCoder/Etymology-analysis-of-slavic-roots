@@ -18,10 +18,10 @@ from sklearn.model_selection import StratifiedKFold
 import matplotlib.pyplot as plt
 from transformers import Trainer
 from copy import deepcopy
-import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import torch
 from datasets import Dataset
+import random as rd
 
 class WeightedTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
@@ -44,10 +44,21 @@ dataset = load_dataset(
     }
 )
 
+declinable = dataset["train"].filter(lambda x: x["declinable"] == True)
+undeclinable = dataset["train"].filter(lambda x: x["declinable"] == False)
+
+declinable = rd.sample(list(declinable["word"]), 5)
+undeclinable = rd.sample(list(undeclinable["word"]), 5)
+
+words = declinable + undeclinable
+
+#Заимствованные корни с наследованными приставками и суффиксами. Необходимо рассмотреть внимание для этих слов
+test_words = ["дебажить", "электричество", "тональность", "штуковина", "сервак", "акк", "агриться", "залутать", "видос", "криповый", "имба"]
+
 # оставляем только нужные столбцы
 dataset = dataset.remove_columns(
     [c for c in dataset["train"].column_names if c not in ["word",
-    "protolanguage", "borrowed_century"]]
+    "protolanguage"]]
 )
 
 dataset = dataset.rename_column("protolanguage", "label")
@@ -67,8 +78,6 @@ def to_labels(example):
 dataset = dataset.map(replace_protoslavic)
 dataset = dataset.map(to_labels)
 
-import numpy as np
-import torch
 from transformers import AutoTokenizer
 from transformers import DataCollatorForSeq2Seq
 
@@ -91,7 +100,6 @@ dataset.set_format("torch")
 labels = np.array(dataset['train']['labels'])
 
 from transformers import T5ForSequenceClassification
-import torch
 
 model = T5ForSequenceClassification.from_pretrained("/userspace/kad2/byt5", num_labels=2)
 
@@ -113,7 +121,7 @@ training_args = TrainingArguments(
     per_device_train_batch_size=32,
     per_device_eval_batch_size=64,
 
-    num_train_epochs=8,
+    num_train_epochs=100,
     weight_decay=0.01,
 
     logging_steps=10,
@@ -126,7 +134,6 @@ training_args = TrainingArguments(
     optim="adamw_torch" # Explicitly set a non-fused optimizer
 )
 
-import numpy as np
 from sklearn.model_selection import StratifiedKFold
 import matplotlib.pyplot as plt
 
@@ -138,7 +145,7 @@ fold_histories = []
 # eval_dataset = splited["test"]
 
 labels = np.array(dataset["train"]["labels"])
-century = np.array(dataset["train"]["borrowed_century"])
+#century = np.array(dataset["train"]["borrowed_century"])
 
 skf = StratifiedKFold(
     n_splits=5,
@@ -147,8 +154,6 @@ skf = StratifiedKFold(
 )
 
 from transformers import Trainer, DataCollatorWithPadding
-from copy import deepcopy
-import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 def compute_metrics(eval_pred):
@@ -177,21 +182,128 @@ def compute_metrics(eval_pred):
     }
 
 all_f1 = []
+general_correct_predictions = []
 
 for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), labels)):
+    # создаём НОВУЮ модель каждый раз
+    model = T5ForSequenceClassification.from_pretrained("/userspace/kad2/byt5",
+                                                        num_labels=2,
+                                                        attn_implementation="eager")
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    plt.figure(figsize=(30,30))
+    # 2. токенизация
+    inputs = tokenizer(
+        words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    # 3. перенос на GPU
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    # 4. forward pass (ВАЖНО: return_dict=True)
+    outputs = model(
+        **inputs,
+        output_attentions=True,
+        return_dict=True
+    )
+
+    # 5. берём encoder attention (а не outputs.attentions!)
+    attentions = outputs.encoder_attentions
+
+    # 6. выбираем слой и голову
+    layer = -1
+    head = 0
+
+    for i, w in enumerate(words):
+        attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(5, 2, i+1)
+        # 7. токены (байтовые)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+
+        # 8. визуализация
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"ByT5 encoder attention for word {words[i]}")
+        plt.colorbar()
+
+    # 9. сохранение (не забудь создать папку заранее)
+    import os
+    os.makedirs("./etymology-analysis", exist_ok=True)
+
+    plt.savefig(f"./etymology-analysis/ByT5_attention_pretrained{fold}.png")
+    plt.show()
+
+
+    plt.figure(figsize=(30,30))
+    num_heads = attentions[layer].shape[1]
+    for h in range(num_heads):
+        attn = attentions[layer][0, h].detach().cpu().numpy()
+
+        plt.subplot(3, 4, h+1)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"ByT5 attn: word - {words[0]}, head - {h}")
+        plt.colorbar()
+
+    plt.savefig(f"./etymology-analysis/ByT5_attention_pretrained_all_heads{fold}.png")
+
+
+
+    plt.figure(figsize=(30,30))
+    # 2. токенизация
+    inputs = tokenizer(
+        test_words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    # 3. перенос на GPU
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    # 4. forward pass (ВАЖНО: return_dict=True)
+    outputs = model(
+        **inputs,
+        output_attentions=True,
+        return_dict=True
+    )
+
+    # 5. берём encoder attention (а не outputs.attentions!)
+    attentions = outputs.encoder_attentions
+
+    for i, w in enumerate(test_words):
+        attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(6, 2, i+1)
+        # 7. токены (байтовые)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+
+        # 8. визуализация
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"ByT5 encoder attention for word {test_words[i]}")
+        plt.colorbar()
+
+    plt.tight_layout()
+    plt.savefig(f"./etymology-analysis/ByT5_attention_pretrained_{fold}.png")
+
 
     print(f"\n===== Fold {fold+1} =====")
 
     train_dataset = dataset["train"].select(train_idx)
     val_dataset = dataset["train"].select(val_idx)
 
-    train_dataset = train_dataset.remove_columns(['word', 'borrowed_century'])
-    val_dataset = val_dataset.remove_columns(['word', 'borrowed_century'])
-
-    # создаём НОВУЮ модель каждый раз
-    model = T5ForSequenceClassification.from_pretrained("/userspace/kad2/byt5",
-                                                        num_labels=2)
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    train_dataset = train_dataset.remove_columns(['word'])
+    val_dataset = val_dataset.remove_columns(['word'])
 
     trainer = WeightedTrainer(
         model=model,
@@ -200,7 +312,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
         data_collator=data_collator,
-        #callbacks=[EarlyStoppingCallback(early_stopping_patience=8)],
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=10)],
     )
 
     trainer.train()
@@ -344,6 +456,17 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
     print("Точность определения японских заимств.:", compute_metrics((predictions_japanese.predictions,predictions_japanese.label_ids)))
     print("Точность определения польских заимств.:", compute_metrics((predictions_polish.predictions,predictions_polish.label_ids)))
 
+    general_correct_predictions.append(
+        (predictions_arabian.predictions[0].argmax(axis=-1) == predictions_arabian.label_ids).sum().item()+
+        (predictions_chinese.predictions[0].argmax(axis=-1) == predictions_chinese.label_ids).sum().item()+
+        (predictions_english.predictions[0].argmax(axis=-1) == predictions_english.label_ids).sum().item()+
+        (predictions_french.predictions[0].argmax(axis=-1) == predictions_french.label_ids).sum().item()+
+        (predictions_german.predictions[0].argmax(axis=-1) == predictions_german.label_ids).sum().item()+
+        (predictions_italian.predictions[0].argmax(axis=-1) == predictions_italian.label_ids).sum().item()+
+        (predictions_japanese.predictions[0].argmax(axis=-1) == predictions_japanese.label_ids).sum().item()+
+        (predictions_polish.predictions[0].argmax(axis=-1) == predictions_polish.label_ids).sum().item()
+    )
+
     #import torch
     #from datasets import Dataset
 
@@ -367,9 +490,114 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
 
     print(trainer.evaluate())
 
+    # 2. токенизация
+    inputs = tokenizer(
+        words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    # 3. перенос на GPU
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    # 4. forward pass (ВАЖНО: return_dict=True)
+    outputs = model(
+        **inputs,
+        output_attentions=True,
+        return_dict=True
+    )
+
+    # 5. берём encoder attention (а не outputs.attentions!)
+    attentions = outputs.encoder_attentions
+
+    # 6. выбираем слой и голову
+    layer = -1
+    head = 0
+
+    plt.figure(figsize=(30,30))
+    for i, w in enumerate(words):
+        attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(5, 2, i+1)
+        # 7. токены (байтовые)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+
+        # 8. визуализация
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"ByT5 encoder attention for word {words[i]}")
+        plt.colorbar()
+
+    # 9. сохранение (не забудь создать папку заранее)
+    import os
+    os.makedirs("./etymology-analysis", exist_ok=True)
+
+    plt.savefig(f"./etymology-analysis/ByT5_attention{fold}.png")
+    plt.show()
+
+    plt.figure(figsize=(30,30))
+    num_heads = attentions[layer].shape[1]
+    for h in range(num_heads):
+        attn = attentions[layer][0, h].detach().cpu().numpy()
+
+        plt.subplot(3, 4, h+1)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"ByT5 attn: word - {words[0]}, head - {h}")
+        plt.colorbar()
+
+    plt.tight_layout()    
+    plt.savefig(f"./etymology-analysis/ByT5_attention_all_heads{fold}.png")
+
+    plt.figure(figsize=(30,30))
+    # 2. токенизация
+    inputs = tokenizer(
+        test_words,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    )
+
+    # 3. перенос на GPU
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
+    # 4. forward pass (ВАЖНО: return_dict=True)
+    outputs = model(
+        **inputs,
+        output_attentions=True,
+        return_dict=True
+    )
+
+    # 5. берём encoder attention (а не outputs.attentions!)
+    attentions = outputs.encoder_attentions
+
+    for i, w in enumerate(test_words):
+        attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
+
+        plt.subplot(6, 2, i+1)
+        # 7. токены (байтовые)
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+
+        # 8. визуализация
+        plt.imshow(attn, interpolation="nearest")
+        plt.xticks(range(len(tokens)), tokens, rotation=90)
+
+        plt.yticks(range(len(tokens)), tokens)
+        plt.title(f"ByT5 encoder attention for word {test_words[i]}")
+        plt.colorbar()
+
+    plt.tight_layout()
+    plt.savefig(f"./etymology-analysis/ByT5_attention_{fold}.png")
+
 print("\n===== FINAL RESULT =====")
 print("Mean F1:", np.mean(all_f1))
 print("Std F1:", np.std(all_f1))
+print("Total correct predictions per fold:", general_correct_predictions)
 
 plt.figure()
 
@@ -381,7 +609,7 @@ plt.ylabel("Метрика F1")
 plt.title("Метрика F1 за итерацию по каждому блоку")
 plt.legend()
 
-plt.savefig("plots/byt5_epochs.png")
+#plt.savefig("plots/byt5_epochs.png")
 
 plt.show()
 
