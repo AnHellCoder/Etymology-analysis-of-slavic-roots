@@ -219,7 +219,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
     plt.tight_layout()
     plt.savefig(f"./etymology-analysis/RuBERT_attention_pretrained_all_heads{fold}.png")
 
-    plt.show()
+    plt.close()
 
     # 2. токенизация
     inputs = tokenizer(
@@ -508,13 +508,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
     plt.tight_layout()
     plt.savefig(f"./etymology-analysis/RuBERT_attention_pretrained_all_heads{fold}.png")
 
+    plt.close()
 
 
     # 2. токенизация
     inputs = tokenizer(
         test_words,
         return_tensors="pt",
-        padding=True,
+g       padding=True,
         truncation=True
     )
 
