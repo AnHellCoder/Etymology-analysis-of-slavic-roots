@@ -181,7 +181,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         plt.figure()
         attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
 
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+        input_ids = inputs["input_ids"][i]
+        tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+        mask = inputs["attention_mask"][i].cpu().numpy().astype(bool)
+
+        # убираем паддинги
+        attn = attn[mask][:, mask]
+        tokens = [t for t, m in zip(tokens, mask) if m]
 
         plt.imshow(attn, interpolation="nearest")
         plt.xticks(range(len(tokens)), tokens, rotation=90)
@@ -201,7 +208,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         plt.figure()
         attn = attentions[layer][0, h].detach().cpu().numpy()
 
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+        input_ids = inputs["input_ids"][i]
+        tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+        mask = inputs["attention_mask"][i].cpu().numpy().astype(bool)
+
+        # убираем паддинги
+        attn = attn[mask][:, mask]
+        tokens = [t for t, m in zip(tokens, mask) if m]
 
         plt.imshow(attn, interpolation="nearest")
         plt.xticks(range(len(tokens)), tokens, rotation=90)
@@ -238,7 +252,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         plt.figure()
         attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
 
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+        input_ids = inputs["input_ids"][i]
+        tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+        mask = inputs["attention_mask"][i].cpu().numpy().astype(bool)
+
+        # убираем паддинги
+        attn = attn[mask][:, mask]
+        tokens = [t for t, m in zip(tokens, mask) if m]
 
         plt.imshow(attn, interpolation="nearest")
         plt.xticks(range(len(tokens)), tokens, rotation=90)
@@ -417,8 +438,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         plt.figure()
         attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
 
-        # 7. токены (байтовые)
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+        input_ids = inputs["input_ids"][i]
+        tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+        mask = inputs["attention_mask"][i].cpu().numpy().astype(bool)
+
+        # убираем паддинги
+        attn = attn[mask][:, mask]
+        tokens = [t for t, m in zip(tokens, mask) if m]
 
         # 8. визуализация
         plt.imshow(attn, interpolation="nearest")
@@ -439,7 +466,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         plt.figure()
         attn = attentions[layer][0, h].detach().cpu().numpy()
 
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+        input_ids = inputs["input_ids"][i]
+        tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+        mask = inputs["attention_mask"][i].cpu().numpy().astype(bool)
+
+        # убираем паддинги
+        attn = attn[mask][:, mask]
+        tokens = [t for t, m in zip(tokens, mask) if m]
 
         plt.imshow(attn, interpolation="nearest")
         plt.xticks(range(len(tokens)), tokens, rotation=90)
@@ -475,7 +509,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         plt.figure()
         attn = attentions[layer][i].mean(dim=0).detach().cpu().numpy()
 
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i])
+        input_ids = inputs["input_ids"][i]
+        tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+        mask = inputs["attention_mask"][i].cpu().numpy().astype(bool)
+
+        # убираем паддинги
+        attn = attn[mask][:, mask]
+        tokens = [t for t, m in zip(tokens, mask) if m]
 
         plt.imshow(attn, interpolation="nearest")
         plt.xticks(range(len(tokens)), tokens, rotation=90)

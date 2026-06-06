@@ -72,6 +72,17 @@ dataset = load_dataset(
     }
 )
 
+declinable = dataset["train"].filter(lambda x: x["declinable"] == True)
+undeclinable = dataset["train"].filter(lambda x: x["declinable"] == False)
+
+declinable = rd.sample(list(declinable["word"]), 5)
+undeclinable = rd.sample(list(undeclinable["word"]), 5)
+
+words = declinable + undeclinable
+
+#Заимствованные корни с наследованными приставками и суффиксами. Необходимо рассмотреть распределение внимания для этих слов
+test_words = ["дебажить", "электричество", "тональность", "штуковина", "сервак", "акк", "агриться", "залутать", "видос", "криповый", "имба"]
+
 dataset = dataset.remove_columns(
     [c for c in dataset["train"].column_names if c not in ["word",
     "protolanguage"]]
@@ -81,17 +92,6 @@ dataset = dataset.rename_column("protolanguage", "label")
 
 dataset = dataset.map(replace_protoslavic)
 dataset = dataset.map(to_labels)
-
-#Заимствованные корни с наследованными приставками и суффиксами. Необходимо рассмотреть распределение внимания для этих слов
-test_words = ["дебажить", "электричество", "тональность", "штуковина", "сервак", "акк", "агриться", "залутать", "видос", "криповый", "имба"]
-
-declinable = dataset["train"].filter(lambda x: x["declinable"] == True)
-undeclinable = dataset["train"].filter(lambda x: x["declinable"] == False)
-
-declinable = rd.sample(list(declinable["word"]), 5)
-undeclinable = rd.sample(list(undeclinable["word"]), 5)
-
-words = declinable + undeclinable
 
 dataset = dataset.map(tokenize, batched=True)
 dataset = dataset.rename_column("label", "labels")
