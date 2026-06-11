@@ -172,9 +172,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
             inputs["input_ids"][i]
         )
 
-        plt.imshow(attn_mean, interpolation="nearest")
-        plt.xticks(range(len(tokens)), tokens, rotation=90)
-        plt.yticks(range(len(tokens)), tokens)
+        non_pad_indices = [idx for idx, tok in enumerate(tokens) if tok != "[PAD]"]
+
+        attn_mean_filtered = attn_mean[np.ix_(non_pad_indices, non_pad_indices)]
+        tokens_filtered = [tokens[idx] for idx in non_pad_indices]
+
+        plt.imshow(attn_mean_filtered, interpolation="nearest")
+        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens)
         plt.title("RuBERT mean attention for word " + w)
         plt.colorbar()
 
@@ -192,9 +197,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
 
         tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
 
-        plt.imshow(attn, interpolation="nearest")
-        plt.xticks(range(len(tokens)), tokens, rotation=90)
-        plt.yticks(range(len(tokens)), tokens)
+        non_pad_indices = [idx for idx, tok in enumerate(tokens) if tok != "[PAD]"]
+
+        attn_filtered = attn[np.ix_(non_pad_indices, non_pad_indices)]
+        tokens_filtered = [tokens[idx] for idx in non_pad_indices]
+
+        plt.imshow(attn_filtered, interpolation="nearest")
+        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens)
         plt.title(f"RuBERT attn: word {words[0]} - head {h}")
         plt.colorbar()
 
@@ -227,16 +237,21 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
             inputs["input_ids"][i]
         )
 
-        plt.imshow(attn, interpolation="nearest")
+        non_pad_indices = [idx for idx, tok in enumerate(tokens) if tok != "[PAD]"]
+
+        attn_filtered = attn[np.ix_(non_pad_indices, non_pad_indices)]
+        tokens_filtered = [tokens[idx] for idx in non_pad_indices]
+
+        plt.imshow(attn_filtered, interpolation="nearest")
 
         plt.xticks(
-            range(len(tokens)),
+            range(len(tokens_filtered)),
             tokens,
             rotation=90
         )
 
         plt.yticks(
-            range(len(tokens)),
+            range(len(tokens_filtered)),
             tokens
         )
 
@@ -416,9 +431,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
             inputs["input_ids"][i]
         )
 
-        plt.imshow(attn_mean, interpolation="nearest")
-        plt.xticks(range(len(tokens)), tokens, rotation=90)
-        plt.yticks(range(len(tokens)), tokens)
+        non_pad_indices = [idx for idx, tok in enumerate(tokens) if tok != "[PAD]"]
+
+        attn_mean_filtered = attn_mean[np.ix_(non_pad_indices, non_pad_indices)]
+        tokens_filtered = [tokens[idx] for idx in non_pad_indices]
+
+        plt.imshow(attn_mean_filtered, interpolation="nearest")
+        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens)
         plt.title("RuBERT mean attention for word " + w)
         plt.colorbar()
 
@@ -436,9 +456,14 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
 
         tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
 
-        plt.imshow(attn, interpolation="nearest")
-        plt.xticks(range(len(tokens)), tokens, rotation=90)
-        plt.yticks(range(len(tokens)), tokens)
+        non_pad_indices = [idx for idx, tok in enumerate(tokens) if tok != "[PAD]"]
+
+        attn_filtered = attn[np.ix_(non_pad_indices, non_pad_indices)]
+        tokens_filtered = [tokens[idx] for idx in non_pad_indices]
+
+        plt.imshow(attn_filtered, interpolation="nearest")
+        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens)
         plt.title(f"RuBERT attention for word {words[0]} - head {h}")
         plt.colorbar()
 
@@ -473,16 +498,21 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
             inputs["input_ids"][i]
         )
 
-        plt.imshow(attn, interpolation="nearest")
+        non_pad_indices = [idx for idx, tok in enumerate(tokens) if tok != "[PAD]"]
+
+        attn_filtered = attn[np.ix_(non_pad_indices, non_pad_indices)]
+        tokens_filtered = [tokens[idx] for idx in non_pad_indices]
+
+        plt.imshow(attn_filtered, interpolation="nearest")
 
         plt.xticks(
-            range(len(tokens)),
+            range(len(tokens_filtered)),
             tokens,
             rotation=90
         )
 
         plt.yticks(
-           range(len(tokens)),
+           range(len(tokens_filtered)),
             tokens
         )
 
