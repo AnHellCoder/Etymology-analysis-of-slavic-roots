@@ -6,7 +6,7 @@ from datasets import load_dataset, Dataset
 import torch.nn as nn
 import torch
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import matplotlib.pyplot as plt
 import random as rd
@@ -81,7 +81,7 @@ undeclinable = rd.sample(list(undeclinable["word"]), 5)
 words = declinable + undeclinable
 
 #Заимствованные корни с наследованными приставками и суффиксами. Необходимо рассмотреть распределение внимания для этих слов
-test_words = ["дебажить", "электричество", "тональность", "штуковина", "сервак", "акк", "агриться", "залутать", "видос", "криповый", "имба"]
+test_words = ["каравай", "дебажить", "электричество", "тональность", "штуковина", "сервак", "акк", "агриться", "залутать", "видос", "криповый", "имба"]
 
 dataset = dataset.remove_columns(
     [c for c in dataset["train"].column_names if c not in ["word",
@@ -125,7 +125,7 @@ fold_histories = []
 labels = np.array(dataset["train"]["labels"])
 #centuries = np.array(dataset["train"]["borrowed_century"])
 
-skf = StratifiedKFold(
+sgkf = StratifiedGroupKFold(
     n_splits=5,
     shuffle=True,
     random_state=42
@@ -134,7 +134,7 @@ skf = StratifiedKFold(
 all_f1 = []
 general_correct_predictions = []
 
-for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), labels)):
+for fold, (train_idx, val_idx) in enumerate(sgkf.split(np.zeros(len(labels)), labels)):
     #========== Визуализация предобученной модели ==========#
     #========== Визуализация усреднения распределения внимания по всем головам для предобуч. RuBERT ==========#
     os.makedirs("./etymology-analysis/RuBERT_attentions", exist_ok=True)
@@ -178,8 +178,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         tokens_filtered = [tokens[idx] for idx in non_pad_indices]
 
         plt.imshow(attn_mean_filtered, interpolation="nearest")
-        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
-        plt.yticks(range(len(tokens_filtered)), tokens)
+        plt.xticks(range(len(tokens_filtered)), tokens_filtered, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens_filtered)
         plt.title("RuBERT mean attention for word " + w)
         plt.colorbar()
 
@@ -203,8 +203,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         tokens_filtered = [tokens[idx] for idx in non_pad_indices]
 
         plt.imshow(attn_filtered, interpolation="nearest")
-        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
-        plt.yticks(range(len(tokens_filtered)), tokens)
+        plt.xticks(range(len(tokens_filtered)), tokens_filtered, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens_filtered)
         plt.title(f"RuBERT attn: word {words[0]} - head {h}")
         plt.colorbar()
 
@@ -246,13 +246,13 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
 
         plt.xticks(
             range(len(tokens_filtered)),
-            tokens,
+            tokens_filtered,
             rotation=90
         )
 
         plt.yticks(
             range(len(tokens_filtered)),
-            tokens
+            tokens_filtered
         )
 
         plt.title(f"RuBERT attention for test word {w}")
@@ -437,8 +437,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         tokens_filtered = [tokens[idx] for idx in non_pad_indices]
 
         plt.imshow(attn_mean_filtered, interpolation="nearest")
-        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
-        plt.yticks(range(len(tokens_filtered)), tokens)
+        plt.xticks(range(len(tokens_filtered)), tokens_filtered, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens_filtered)
         plt.title("RuBERT mean attention for word " + w)
         plt.colorbar()
 
@@ -462,8 +462,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
         tokens_filtered = [tokens[idx] for idx in non_pad_indices]
 
         plt.imshow(attn_filtered, interpolation="nearest")
-        plt.xticks(range(len(tokens_filtered)), tokens, rotation=90)
-        plt.yticks(range(len(tokens_filtered)), tokens)
+        plt.xticks(range(len(tokens_filtered)), tokens_filtered, rotation=90)
+        plt.yticks(range(len(tokens_filtered)), tokens_filtered)
         plt.title(f"RuBERT attention for word {words[0]} - head {h}")
         plt.colorbar()
 
@@ -507,13 +507,13 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), lab
 
         plt.xticks(
             range(len(tokens_filtered)),
-            tokens,
+            tokens_filtered,
             rotation=90
         )
 
         plt.yticks(
            range(len(tokens_filtered)),
-            tokens
+            tokens_filtered
         )
 
         plt.title(f"RuBERT attention for test word {w}")

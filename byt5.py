@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 import os
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import matplotlib.pyplot as plt
 import random as rd
@@ -137,7 +137,7 @@ fold_histories = []
 labels = np.array(dataset["train"]["labels"])
 #century = np.array(dataset["train"]["borrowed_century"])
 
-skf = StratifiedKFold(
+sgkf = StratifiedGroupKFold(
     n_splits=5,
     shuffle=True,
     random_state=42
@@ -146,7 +146,7 @@ skf = StratifiedKFold(
 all_f1 = []
 general_correct_predictions = []
 
-for fold, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(labels)), labels)):
+for fold, (train_idx, val_idx) in enumerate(sgkf.split(np.zeros(len(labels)), labels)):
     #========== Визуализация предобученной модели ==========#
     #========== Визуализация усреднения распределения внимания по всем головам для предобуч. ByT5 ==========#
     os.makedirs("./etymology-analysis/ByT5_attentions", exist_ok=True)
