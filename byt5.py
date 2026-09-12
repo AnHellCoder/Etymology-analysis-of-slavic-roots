@@ -146,6 +146,7 @@ sgkf = StratifiedGroupKFold(
 all_f1 = []
 general_correct_predictions = []
 
+plt.rcParams["font.family"] = "DejaVu Sans"
 for fold, (train_idx, val_idx) in enumerate(sgkf.split(np.zeros(len(labels)), labels)):
     #========== Визуализация предобученной модели ==========#
     #========== Визуализация усреднения распределения внимания по всем головам для предобуч. ByT5 ==========#
